@@ -7,10 +7,14 @@ Getopt::Long::Configure('bundling');
 my %opt=(); #hash to hold all the options. 
 my @files; #holds the names of files to process
 my @genes; #holds the names of genes to process
-my $result = GetOptions (\%opt, "i=s", 
+my $result = GetOptions (\%opt, "i=s", "b=s",
 			  "in=s"=>\@files,
-			  "genes=s"=>\@genes,
-			  "b=s");
+			  "genes=s"=>\@genes);
+
+# while ( my ($key, $value) = each(%opt) ) {
+#     print "$key => $value\n";
+# }
+
 &main();
 
 sub main{
@@ -26,8 +30,9 @@ sub main{
 	my ($f2_r)=&read_fasta($files[$j]);#read the fasta file and put seqs in %f2
 	%f2=%$f2_r; #dereference
 
-	my($bed_ref)=&makebed(\%f1,\%f2,) if(!defined($opt{b})); #make the bedfile if not specified.
+	my($bed_ref)=&makebed(\%f1,\%f2,); #make the bedfile if not specified.
 	@bed=@$bed_ref; #dereference
+	
     }
   }
 }
@@ -43,7 +48,7 @@ sub read_fasta{
   my %seq=();
   my $seq="";
 
-  open(IN,$filename);
+  open(IN,$filename) or die "Can't open $filename: $!";
 
   while (<IN>) {
     next if(/^$/);
@@ -67,7 +72,7 @@ sub read_fasta{
   return(\%seq);
 }
 
-#Subroutine to make the bed file if not already given by user
+#Subroutine to make the bed array.
 #input - hashes of f1 and f2
 #output - reference to hash of bed array.
 sub makebed{
@@ -80,16 +85,49 @@ sub makebed{
   my $i=0;
   my $j=0;
   
-  #if the gene names are inputed by user
-  if(@genes){
+  #if the bedfile is provided, read into array
+  if(defined($opt{b})){
+    open(BED,$opt{b}) or die "Can't open $opt{b}: $!";
+    while(<BED>){
+      chomp;
+      my @t=split(/\t/,$_);
+      #check if the genes exist in both files and the length of sequences
+      if(($f1{$t[0]} && $f2{$t[0]})&& (length($f1{$t[0]})==length($f2{$t[0]}))){
+	  $bed[$i][$j]="$t[0]";
+	  $bed[$i][$j+1]="$t[1]\t$t[2]";
+	  $i++;
+      }
+      else{die("$t[0] either has no partner or the sequence length are different. Please correct the fasta file or bed file\n");}
+    }
+  }
+  elsif(@genes){ #if the gene names are inputed by user, make bedfile w/ only those genes
     foreach my $gene(@genes){ #make bed entry for each gene
 	#check to make sure the gene name exists in both files and seqs length are same.
 	if(($f1{$gene} && $f2{$gene})&& (length($f1{$gene})==length($f2{$gene}))){
 	    $bed[$i][$j]="$gene";
 	    $bed[$i][$j+1]="0\t".length($f1{$gene});
 	    $i++;
-      }
+	}
+	else{die("$gene has no partner. Please correct the header or input options\n");}
     }
+  }
+  else{
+    #make bed files for all the genes given there's one partner for every gene and
+    #seq length are the same.
+    for my $gene(keys %f1){
+	if(($f1{$gene} && $f2{$gene})&& (length($f1{$gene})==length($f2{$gene}))){
+	    $bed[$i][$j]="$gene";
+	    $bed[$i][$j+1]="0\t".length($f1{$gene});
+	    $i++;
+	}
+	else{die("Either there is a sequence with no partner or the sequence length is different\n");}
+    }
+  }
+  for(my $r=0;$r<$i;$r++){
+    for (my $c=0;$c<2;$c++){
+      print "$bed[$r][$c]\t";
+    }
+    print "\n";
   }
   return(\@bed);
 }
