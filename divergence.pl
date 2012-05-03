@@ -5,22 +5,54 @@ use strict;
 use Getopt::Long;
 Getopt::Long::Configure('bundling'); 
 
-&main();
+&seq2dist();
 
-sub main{
-  &usage if(@ARGV < 1); #Show usage if no input
+sub seq2dist{
+my $usage='
+Version 1.0
+Input: Atleast 2 fasta files containing the sequences of interest. Both files must have the same headers for the genes of interest. 
+Output: Table of following columns: GeneID,ts,tv,p-dist,jc_dist,and kimura_dist
+
+Options:
+  --in: 	To specify file names. 
+		ex. --in file1 --in file2
+
+  --genes:	To specify gene names
+		ex. --genes chr1 --genes chr2
+
+  --bed:	To input bed files. The tool only takes 1 bed file. 
+		ex. --bed bed.txt.
+
+Example commands:
+To get the statistics for all the genes in 2 file
+perl divergence.pl --in file1 --in file2 
+
+To get the statistics for the specified coordinates in the bed file. 
+perl divergence.pl --in file1 --in file2 --bed bed.txt
+
+To get the statistics for the genes of interest. 
+perl divergence.pl --in file1 --in file2 --genes cat --genes mouse
+
+To get the statistics for the genes of interest with specified coordinates in bed file
+perl divergence.pl --in file1 --in file2 --genes cat --genes mouse --bed bed.txt';
+
+  if(@ARGV < 1){die($usage);} #Show usage if no input
 
   my %opt=(); #hash to hold all the options. 
   my @files; #holds the names of files to process
   my @genes; #holds the names of genes to process
-  my $result = GetOptions (\%opt, "bed=s",
+  my $result = GetOptions (\%opt, "bed=s", "h|help",
 			    "in=s"=>\@files,
 			    "gene=s"=>\@genes);
   if(!$result){die("exited due to incorrect options");} #exit program if any problems with options.
-  &usage if ($opt{h});
-  &seqs2dist(\%opt,\@files,\@genes);
+  if ($opt{h}){die($usage);}
+  die("No files specified. Use --file option to specify file") unless (@files >1); ##die if more than 1 file is not specified.
+
+  & _run_seqs2dist(\%opt,\@files,\@genes);
+
 }
-sub seqs2dist{
+
+sub _run_seqs2dist{
   my $opt_ref=shift;
   my %opt=%$opt_ref;
   my $files_ref=shift;
@@ -35,15 +67,15 @@ sub seqs2dist{
   #Do every combination of files specified
   for(my $i=0;$i<scalar(@files);$i++){
     for(my $j=$i+1;$j<scalar(@files);$j++){
-	my($f1_r)=&read_fasta($files[$i],\%opt); #read the fasta file and put seqs in %f1
+	my($f1_r)=&_read_fasta($files[$i],\%opt); #read the fasta file and put seqs in %f1
 	%f1=%$f1_r; #dereference
-	my ($f2_r)=&read_fasta($files[$j],\%opt);#read the fasta file and put seqs in %f2
+	my ($f2_r)=&_read_fasta($files[$j],\%opt);#read the fasta file and put seqs in %f2
 	%f2=%$f2_r; #dereference
 
-	my($bed_ref)=&makebed(\%f1,\%f2,\%opt,\@genes); #make the bedfile if not specified.
+	my($bed_ref)=&_makebed(\%f1,\%f2,\%opt,\@genes); #make the bedfile if not specified.
 	@bed=@$bed_ref; #dereference
 
-	&run_analysis(\%f1, \%f2, \@bed, $files[$i],$files[$j],\%opt);
+	&_run_analysis(\%f1, \%f2, \@bed, $files[$i],$files[$j],\%opt);
     }
   }
 }
@@ -51,7 +83,7 @@ sub seqs2dist{
 #subroutine to read the fata file
 #input - filename.
 #output -reference to hash w/ seqs n headers.
-sub read_fasta{
+sub _read_fasta{
   my $filename=shift;
   my $opt_ref=shift;
   my %opt=%$opt_ref;
@@ -88,7 +120,7 @@ sub read_fasta{
 #Subroutine to make the bed array.
 #input - hashes of f1 and f2
 #output - reference to hash of bed array.
-sub makebed{
+sub _makebed{
   my $f1_ref=shift;
   my $f2_ref=shift;
   my $opt_ref=shift;
@@ -145,7 +177,7 @@ sub makebed{
 
 #subroutine to get the sequences and it through the 
 #algorithms.
-sub run_analysis{
+sub _run_analysis{
   my $f1_ref=shift;
   my $f2_ref=shift;
   my $bed_ref=shift;
@@ -176,9 +208,9 @@ sub run_analysis{
     }
     else{die "Cannot find $gene";}
     
-    my ($p,$L)=&p_value($seq1, $seq2);
-    my $jc=&jukes_cantor($seq1,$seq2,$p);
-    my ($k,$ts,$tv)=&kimura2($seq1,$seq2,$L);
+    my ($p,$L)=&_p_value($seq1, $seq2);
+    my $jc=&_jukes_cantor($seq1,$seq2,$p);
+    my ($k,$ts,$tv)=&_kimura2($seq1,$seq2,$L);
     my ($f,$f1);
 
     if($jc eq 'NA'){ $f='%s';}else{$f='%.3f';}
@@ -205,7 +237,7 @@ sub _extractsubseq {
 
 #Calculates P-distance
 #number of differences/total
-sub p_value{
+sub _p_value{
   my $seq1=shift;
   my $seq2=shift;
   my $d=0;
@@ -226,7 +258,7 @@ sub p_value{
 }
 
 #uses Jukes Cantor model to calculate the 
-sub jukes_cantor{
+sub _jukes_cantor{
   my $seq1=shift;
   my $seq2=shift;
   my $p=shift;
@@ -238,14 +270,14 @@ sub jukes_cantor{
   return $jc;
 }
 
-sub kimura2{
+sub _kimura2{
   my $seq1=shift;
   my $seq2=shift;
   my $L=shift;
   my $p=0;
   my $q=0;
   my $d=0;
-  my ($ts, $tv)=&tstv($seq1, $seq2);
+  my ($ts, $tv)=&_tstv($seq1, $seq2);
 
   $p=($ts/$L);
   $q=($tv/$L);
@@ -261,7 +293,7 @@ sub kimura2{
   return ($d,$ts,$tv);
 }  
 
-sub tstv{
+sub _tstv{
   my $seq1=shift;
   my $seq2=shift;
   my ($n1,$n2);
@@ -282,35 +314,4 @@ sub tstv{
   }
 
   return ($ts, $tv);
-}
-
-sub usage{
-
-die(qq/Version 1.0
-Input: Atleast 2 fasta files containing the sequences of interest. Both files must have the same headers for the genes of interest. 
-Output: Table of following columns: GeneID,ts,tv,p-dist,jc_dist,and kimura_dist
-
-Options:
-  --in: 	To specify file names. 
-		ex. --in file1 --in file2
-
-  --genes:	To specify gene names
-		ex. --genes chr1 --genes chr2
-
-  --bed:	To input bed files. The tool only takes 1 bed file. 
-		ex. --bed bed.txt.
-
-Example commands:
-To get the statistics for all the genes in 2 file
-perl divergence.pl --in file1 --in file2 
-
-To get the statistics for the specified coordinates in the bed file. 
-perl divergence.pl --in file1 --in file2 --bed bed.txt
-
-To get the statistics for the genes of interest. 
-perl divergence.pl --in file1 --in file2 --genes cat --genes mouse
-
-To get the statistics for the genes of interest with specified coordinates in bed file
-perl divergence.pl --in file1 --in file2 --genes cat --genes mouse --bed bed.txt
-\n/);
 }
