@@ -14,14 +14,14 @@ Input: Atleast 2 fasta files containing the sequences of interest. Both files mu
 Output: Table of following columns: GeneID,ts,tv,p-dist,jc_dist,and kimura_dist
 
 Options:
-  --in: 	To specify file names. 
-		ex. --in file1 --in file2
+  --in: 	[STR] To specify file names. 
+		      ex. --in file1 --in file2
 
-  --genes:	To specify gene names
-		ex. --genes chr1 --genes chr2
+  --genes:	[STR] To specify gene names
+		      ex. --genes chr1 --genes chr2
 
-  --bed:	To input bed files. The tool only takes 1 bed file. 
-		ex. --bed bed.txt.
+  --bed:	[STR] To input bed files. The tool only takes 1 bed file. 
+		      ex. --bed bed.txt.
 
 Example commands:
 To get the statistics for all the genes in 2 file
